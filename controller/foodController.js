@@ -1,5 +1,5 @@
-import orderItem from "../models/orderItem.js";
-import Order from "../models/order.js"; // ✅ Correct name and path
+import FoodItem from "../models/foodItem.js";
+import Order from "../models/order.js";
 import sendEmail from "../util/sendEmail.js";
 
 export const placeOrder = async (req, res) => {
@@ -10,19 +10,18 @@ export const placeOrder = async (req, res) => {
       return res.status(400).json({ error: "Order cannot be empty." });
     }
 
-    const newOrder = new Order({
+    let newOrder = new Order({
       userId: req.user.id,
       items,
       totalAmount,
     });
 
     await newOrder.save();
+    newOrder = await newOrder.populate("items.foodItemId", "name price");
 
-    const itemListHtml = await Promise.all(
-      items.map(async ({ foodItemId, quantity }) => {
-        const food = await orderItem.findById(foodItemId);
-        return `<li>${food.name} x ${quantity} — ₦${food.price * quantity}</li>`;
-      })
+    const itemListHtml = newOrder.items.map(
+      ({ foodItemId, quantity }) =>
+        `<li>${foodItemId.name} x ${quantity} — ₦${foodItemId.price * quantity}</li>`
     );
 
     const userEmail = req.user.email || req.body.email;
@@ -54,11 +53,48 @@ export const placeOrder = async (req, res) => {
 
 export const fetchCert = async (req, res) => {
   try {
-    let user = await Order.find().select(
-      "userId items totalAmount"
-    )
+    const orders = await Order.find({ userId: req.user.id }) 
+      .select("items totalAmount status createdAt")
+      .populate("items.foodItemId", "name price"); 
 
-    return res
-
+    return res.status(200).json({
+      message: "Your orders fetched successfully",
+      orders,
+    });
+  } catch (error) {
+    console.error("Error fetching orders:", error);
+    return res.status(500).json({ error: "Server error while fetching orders" });
   }
-}
+};
+
+
+export const updateOrderStatus = async (req, res) => {
+  try {
+    const { orderId } = req.params;   // order ID from URL
+    const { status } = req.body;      // new status from request body
+
+    const validStatuses = ["Pending", "Preparing", "Out for Delivery", "Delivered", "Cancelled"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: "Invalid status value." });
+    }
+
+    const order = await Order.findByIdAndUpdate(
+      orderId,
+      { status },
+      { new: true } 
+    ).populate("items.foodItemId", "name price");
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    return res.status(200).json({
+      message: `Order status updated to '${status}'.`,
+      order,
+    });
+  } catch (error) {
+    console.error("Error updating order status:", error);
+    return res.status(500).json({ error: "Server error while updating order status." });
+  }
+};
+

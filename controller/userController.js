@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import Register from "../model/register.js";
+import Register from "../models/register.js";
 
 
 export const signUp = async (req, res) => {
@@ -55,7 +55,7 @@ export const signUp = async (req, res) => {
             }
 
             // generate a JWT token                             secret code
-            const token = jwt.sign ({ userId: user._id }, "JQULYSXL12345", {
+            const token = jwt.sign ({ userId: user._id, email: user.email, fullname: user.fullname}, "JQULYSXL12345", {
             expiresIn: "1h",
         });
 
